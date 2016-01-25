@@ -99,6 +99,9 @@ module VagrantPlugins
       attr_accessor :tpm_type
       attr_accessor :tpm_path
 
+      # serial consoles
+      attr_accessor :serials
+
       # Sets the max number of NICs that can be created
       # Default set to 8. Don't change the default unless you know
       # what are doing
@@ -245,6 +248,8 @@ module VagrantPlugins
         @mgmt_attach       = UNSET_VALUE
 
         @qemu_args  = []
+
+        @serials           = []
       end
 
       def boot(device)
@@ -451,6 +456,20 @@ module VagrantPlugins
         @smartcard_dev[:source_mode] = options[:source_mode] if @smartcard_dev[:type] == 'tcp'
         @smartcard_dev[:source_host] = options[:source_host] if @smartcard_dev[:type] == 'tcp'
         @smartcard_dev[:source_service] = options[:source_service] if @smartcard_dev[:type] == 'tcp'
+      end
+
+      def serial(options={})
+        options = {
+          :type => "pty",
+          :source => nil,
+        }.merge(options)
+
+        serial = {
+          :type => options[:type],
+          :source => options[:source],
+        }
+
+        @serials << serial
       end
 
       # NOTE: this will run twice for each time it's needed- keep it idempotent
@@ -681,6 +700,9 @@ module VagrantPlugins
         @mgmt_attach = true if @mgmt_attach == UNSET_VALUE
 
         @qemu_args = [] if @qemu_args == UNSET_VALUE
+
+        # serial ports
+        @serials = [{:type => 'pty', :source => nil}] if @serials == []
       end
 
       def validate(machine)
@@ -689,6 +711,12 @@ module VagrantPlugins
         machine.provider_config.disks.each do |disk|
           if disk[:path] && (disk[:path][0] == '/')
             errors << "absolute volume paths like '#{disk[:path]}' not yet supported"
+          end
+        end
+
+        machine.provider_config.serials.each do |serial|
+          if serial[:source] and serial[:source][:path].nil?
+            errors << "serial :source requires :path to be defined"
           end
         end
 
@@ -716,6 +744,10 @@ module VagrantPlugins
           c = cdroms.dup
           c += other.cdroms
           result.cdroms = c
+
+          s = serials.dup
+          s += other.serials
+          result.serials = s
         end
       end
     end

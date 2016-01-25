@@ -103,6 +103,9 @@ module VagrantPlugins
           # smartcard device
           @smartcard_dev = config.smartcard_dev
 
+          # serial and console
+          @serials = config.serials
+
           # RNG device passthrough
           @rng = config.rng
 
@@ -134,6 +137,18 @@ module VagrantPlugins
             raise Errors::NoStoragePool if storage_pool.nil?
             xml = Nokogiri::XML(storage_pool.xml_desc)
             storage_prefix = xml.xpath('/pool/target/path').inner_text.to_s + '/'
+          end
+
+          @serials.each do |serial|
+            if serial[:source] and serial[:source][:path]
+              dir = File.dirname(serial[:source][:path])
+              begin
+                FileUtils.mkdir_p(dir)
+              rescue ::Errno::EACCES
+                raise Errors::SerialCannotCreatePathError,
+                  path: dir
+              end
+            end
           end
 
           @disks.each do |disk|
@@ -202,7 +217,7 @@ module VagrantPlugins
           env[:ui].info(" -- Graphics Password: #{@graphics_passwd.empty? ? 'Not defined' : 'Defined'}")
           env[:ui].info(" -- Video Type:        #{@video_type}")
           env[:ui].info(" -- Video VRAM:        #{@video_vram}")
-          env[:ui].info(" -- Sound Type:	#{@sound_type}")
+          env[:ui].info(" -- Sound Type:        #{@sound_type}")
           env[:ui].info(" -- Keymap:            #{@keymap}")
           env[:ui].info(" -- TPM Path:          #{@tpm_path}")
 
@@ -282,6 +297,13 @@ module VagrantPlugins
 
           if not @smartcard_dev.empty?
             env[:ui].info(" -- smartcard device:  mode=#{@smartcard_dev[:mode]}, type=#{@smartcard_dev[:type]}")
+          end
+
+          @serials.each_with_index do |serial, port|
+            if serial[:source]
+              env[:ui].info(" -- SERIAL(COM#{port}:       redirect to #{serial[:source][:path]}")
+              env[:ui].warn(I18n.t('vagrant_libvirt.warnings.creating_domain_console_access_disabled'))
+            end
           end
 
           @qargs = config.qemu_args
